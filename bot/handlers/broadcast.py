@@ -17,7 +17,7 @@ def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
 
-@router.message(Command("broadcast"))
+@router.message(Command("broadcast"), F.chat.type == "private")
 async def cmd_broadcast(message: Message):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Sizda bu buyruqni ishlatish huquqi yo'q.")
@@ -34,7 +34,7 @@ async def cmd_broadcast(message: Message):
     )
 
 
-@router.message(Command("cancel"))
+@router.message(Command("cancel"), F.chat.type == "private")
 async def cmd_cancel(message: Message):
     if message.from_user.id in broadcast_state:
         del broadcast_state[message.from_user.id]

@@ -15,7 +15,7 @@ def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
 
-@router.message(Command("stats"))
+@router.message(Command("stats"), F.chat.type == "private")
 async def cmd_stats(message: Message):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Sizda bu buyruqni ishlatish huquqi yo'q.")
@@ -33,7 +33,7 @@ async def cmd_stats(message: Message):
     )
 
 
-@router.message(Command("blacklist"))
+@router.message(Command("blacklist"), F.chat.type == "private")
 async def cmd_blacklist(message: Message):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Sizda bu buyruqni ishlatish huquqi yo'q.")
@@ -59,7 +59,7 @@ async def cmd_blacklist(message: Message):
     await message.answer(text, parse_mode="HTML")
 
 
-@router.message(Command("unban"))
+@router.message(Command("unban"), F.chat.type == "private")
 async def cmd_unban(message: Message):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Sizda bu buyruqni ishlatish huquqi yo'q.")
@@ -79,5 +79,24 @@ async def cmd_unban(message: Message):
     await remove_from_blacklist(user_id)
     await message.answer(
         f"✅ Foydalanuvchi <code>{user_id}</code> qora ro'yxatdan o'chirildi.",
+        parse_mode="HTML"
+    )
+
+
+@router.message(Command("help"), F.chat.type == "private")
+async def cmd_help(message: Message):
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Sizda bu buyruqni ishlatish huquqi yo'q.")
+        return
+
+    await message.answer(
+        "🛡️ <b>Guruhmaster Bot — Admin Panel</b>\n\n"
+        "<b>Buyruqlar:</b>\n"
+        "/stats — Dashboard statistikasi\n"
+        "/blacklist — Qora ro'yxat\n"
+        "/unban USER_ID — Ban bekor qilish\n"
+        "/broadcast — E'lon yuborish\n"
+        "/help — Yordam\n\n"
+        "<i>Barcha buyruqlar faqat shaxsiy chatda ishlaydi.</i>",
         parse_mode="HTML"
     )
