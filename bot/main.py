@@ -2,7 +2,6 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -34,17 +33,6 @@ dp.include_routers(
 )
 
 
-async def self_ping():
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:8000/health") as resp:
-                    logger.info(f"Self-ping: {resp.status}")
-        except Exception as e:
-            logger.warning(f"Self-ping xatosi: {e}")
-        await asyncio.sleep(240)
-
-
 async def run_bot_polling():
     try:
         await create_pool()
@@ -52,27 +40,29 @@ async def run_bot_polling():
         logger.info("Database tayyor")
         logger.info("Bot polling boshlandi...")
         await dp.start_polling(bot)
+    except asyncio.CancelledError:
+        logger.info("Bot polling bekor qilindi")
     except Exception as e:
         logger.error(f"Bot xatosi: {e}")
     finally:
-        await close_pool()
-        await bot.session.close()
+        try:
+            await close_pool()
+        except Exception:
+            pass
+        try:
+            await bot.session.close()
+        except Exception:
+            pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     polling_task = asyncio.create_task(run_bot_polling())
-    ping_task = asyncio.create_task(self_ping())
-    logger.info("Bot va keep-alive ishga tushdi")
+    logger.info("Bot ishga tushdi")
     yield
     polling_task.cancel()
-    ping_task.cancel()
     try:
         await polling_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await ping_task
     except asyncio.CancelledError:
         pass
 
