@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from aiogram import Router, F, Bot
 from aiogram.types import Message, ChatMemberUpdated
 from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
@@ -60,7 +61,6 @@ async def check_group_message(message: Message, bot: Bot):
     if await is_blacklisted(user_id):
         try:
             await message.delete()
-            logger.info(f"Qora ro'yxatdagi foydalanuvchi xabari o'chirildi: {user_id}")
         except Exception as e:
             logger.error(f"Xabarni o'chirishda xato: {e}")
         return
@@ -68,17 +68,18 @@ async def check_group_message(message: Message, bot: Bot):
     if not is_spam(text):
         return
 
+    warn_count = add_warning(user_id, chat_id)
+    logger.info(f"WARN: user={user_id} group={chat_id} count={warn_count} text={text[:30]}")
+
     try:
         await message.delete()
     except Exception as e:
         logger.error(f"Spam xabarni o'chirishda xato: {e}")
-        return
-
-    warn_count = add_warning(user_id, chat_id)
 
     if warn_count == 1:
         try:
-            warn_msg = await message.answer(
+            warn_msg = await bot.send_message(
+                chat_id,
                 f"⚠️ <b>Ogohlantirish 1/3</b>\n"
                 f"👤 {user.full_name}\n\n"
                 f"Noqonuniy xabar aniqlandi va o'chirildi.\n"
@@ -86,26 +87,21 @@ async def check_group_message(message: Message, bot: Bot):
                 parse_mode="HTML"
             )
             await log_warning(user_id, chat_id, 1, "warned")
-
-            import asyncio
             asyncio.create_task(delete_later(warn_msg, 10))
-
         except Exception as e:
             logger.error(f"Ogohlantirish xabarini yuborishda xato: {e}")
 
     elif warn_count == 2:
         try:
-            warn_msg = await message.answer(
+            warn_msg = await bot.send_message(
+                chat_id,
                 f"⚠️ <b>Ogohlantirish 2/3</b>\n"
                 f"👤 {user.full_name}\n\n"
                 f"<b>DIQQAT!</b> Yana 1 marta qoida buzsangiz, guruhdan chiqarilasiz!",
                 parse_mode="HTML"
             )
             await log_warning(user_id, chat_id, 2, "warned")
-
-            import asyncio
             asyncio.create_task(delete_later(warn_msg, 10))
-
         except Exception as e:
             logger.error(f"Ogohlantirish xabarini yuborishda xato: {e}")
 
@@ -121,7 +117,8 @@ async def check_group_message(message: Message, bot: Bot):
             await bot.ban_chat_member(chat_id, user_id)
             reset_warnings(user_id, chat_id)
 
-            await message.answer(
+            await bot.send_message(
+                chat_id,
                 f"🚫 <b>BAN!</b>\n"
                 f"👤 {full_name} guruhdan chiqarildi.\n"
                 f"📋 Global qora ro'yxatga qo'shildi.\n\n"
@@ -147,7 +144,6 @@ async def check_group_message(message: Message, bot: Bot):
 
 
 async def delete_later(message: Message, seconds: int):
-    import asyncio
     await asyncio.sleep(seconds)
     try:
         await message.delete()

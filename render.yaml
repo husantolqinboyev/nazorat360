@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: nazora360-bot
+    name: guruhmaster-bot
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python -m bot.main
@@ -13,3 +13,4 @@ services:
         sync: false
     healthCheckPath: /health
     autoDeploy: true
+    plan: free

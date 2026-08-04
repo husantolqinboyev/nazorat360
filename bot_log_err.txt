@@ -1,0 +1,6 @@
+2026-08-04 13:15:03,085 - bot.database.connection - INFO - Database pool yaratildi
+2026-08-04 13:15:03,772 - bot.database.connection - INFO - Database jadvallari yaratildi
+2026-08-04 13:15:03,978 - __main__ - INFO - Database tayyor
+2026-08-04 13:15:03,980 - __main__ - INFO - Bot polling boshlandi...
+2026-08-04 13:15:03,981 - aiogram.dispatcher - INFO - Start polling
+2026-08-04 13:15:04,583 - aiogram.dispatcher - INFO - Run polling for bot @guruhmasterbot id=8501211138 - 'Guruh Master'
