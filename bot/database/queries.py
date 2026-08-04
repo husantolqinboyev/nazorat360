@@ -81,3 +81,33 @@ async def log_warning(user_id: int, group_id: int, warn_count: int, action: str)
             INSERT INTO warnings_log (user_id, group_id, warn_count, action)
             VALUES ($1, $2, $3, $4)
         """, user_id, group_id, warn_count, action)
+
+
+async def get_group_warned_count(group_id: int) -> int:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.fetchval("""
+            SELECT COUNT(DISTINCT user_id) FROM warnings_log
+            WHERE group_id = $1 AND action = 'warned'
+        """, group_id)
+        return result or 0
+
+
+async def get_group_banned_count(group_id: int) -> int:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.fetchval("""
+            SELECT COUNT(DISTINCT user_id) FROM warnings_log
+            WHERE group_id = $1 AND action = 'banned'
+        """, group_id)
+        return result or 0
+
+
+async def get_group_total_warnings(group_id: int) -> int:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.fetchval("""
+            SELECT COUNT(*) FROM warnings_log
+            WHERE group_id = $1
+        """, group_id)
+        return result or 0

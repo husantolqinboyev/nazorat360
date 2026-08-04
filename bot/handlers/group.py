@@ -2,11 +2,12 @@ import logging
 import asyncio
 from aiogram import Router, F, Bot
 from aiogram.types import Message, ChatMemberUpdated
-from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
+from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, Command
 
 from bot.database.queries import (
     add_group, remove_group, is_blacklisted,
-    log_warning, add_to_blacklist
+    log_warning, add_to_blacklist,
+    get_group_warned_count, get_group_banned_count, get_group_total_warnings
 )
 from bot.utils.anti_spam import is_spam, add_warning, get_warning_count, reset_warnings
 from bot.config import ADMIN_ID
@@ -40,6 +41,24 @@ async def on_bot_added(event: ChatMemberUpdated):
             f"<i>Admin huquqlari talab qilinadi.</i>",
             parse_mode="HTML"
         )
+
+
+@router.message(Command("status"), F.chat.type.in_({"group", "supergroup"}))
+async def cmd_status(message: Message, bot: Bot):
+    chat_id = message.chat.id
+
+    warned = await get_group_warned_count(chat_id)
+    banned = await get_group_banned_count(chat_id)
+    total = await get_group_total_warnings(chat_id)
+
+    await message.answer(
+        f"📊 <b>{message.chat.title} — Holat</b>\n\n"
+        f"⚠️ Ogohlantirilganlar: <b>{warned}</b> foydalanuvchi\n"
+        f"🚫 Bloklanganlar: <b>{banned}</b> foydalanuvchi\n"
+        f"📝 Jami ogohlantirishlar: <b>{total}</b>\n\n"
+        f"<i>3 bosqichli ogohlantirish tizimi ishlayapti.</i>",
+        parse_mode="HTML"
+    )
 
 
 @router.message(F.chat.type.in_({"group", "supergroup"}))
