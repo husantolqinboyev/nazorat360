@@ -2,6 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -32,7 +33,16 @@ dp.include_routers(
     broadcast.router
 )
 
-bot_task = None
+
+async def self_ping():
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("http://localhost:8000/health") as resp:
+                    logger.info(f"Self-ping: {resp.status}")
+        except Exception as e:
+            logger.warning(f"Self-ping xatosi: {e}")
+        await asyncio.sleep(240)
 
 
 async def run_bot_polling():
@@ -51,16 +61,20 @@ async def run_bot_polling():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bot_task
-    bot_task = asyncio.create_task(run_bot_polling())
-    logger.info("Bot background task ishga tushdi")
+    polling_task = asyncio.create_task(run_bot_polling())
+    ping_task = asyncio.create_task(self_ping())
+    logger.info("Bot va keep-alive ishga tushdi")
     yield
-    if bot_task:
-        bot_task.cancel()
-        try:
-            await bot_task
-        except asyncio.CancelledError:
-            pass
+    polling_task.cancel()
+    ping_task.cancel()
+    try:
+        await polling_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await ping_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(lifespan=lifespan)
@@ -74,6 +88,11 @@ async def health_check():
 @app.get("/")
 async def root():
     return {"status": "ok", "bot": "Guruhmaster Bot"}
+
+
+@app.head("/")
+async def head_root():
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":
