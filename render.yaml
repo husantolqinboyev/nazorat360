@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: nazora360-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m bot.main
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
