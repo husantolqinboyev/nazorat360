@@ -8,6 +8,29 @@ BANNED_EMOJIS = [
 
 BANNED_KEYWORDS = [
     "casino", "18+", "seks", "nude", "xxx",
+    "profilimda", "profilimga", "profilemga",
+    "issiq lahzalar", "issiq lahzalarim",
+    "hoziroq kiring", "hozir kiring",
+    "tezda kiring",
+    "sext", "sex", "erotic", "erotika",
+    "intim", "intimate", "naked", "nudes",
+    "onlyfans", "fansly", "linktr",
+    "sikis", "porn", "hentai", "hentay",
+    "chatrandom", "ome.tv", "chatspin",
+]
+
+SPAM_EMOJI_PAIRS = [
+    ("💦", "💋"),
+    ("💦", "🍑"),
+    ("💦", "🍆"),
+    ("💋", "🍑"),
+    ("💋", "🍆"),
+    ("🔥", "💦"),
+    ("🔥", "💋"),
+    ("😏", "💦"),
+    ("😏", "💋"),
+    ("😏", "🍑"),
+    ("😏", "🍆"),
 ]
 
 WARN_EXPIRY = 6 * 3600
@@ -24,13 +47,31 @@ def is_spam(text: str) -> bool:
         if emoji in text:
             return True
 
+    for e1, e2 in SPAM_EMOJI_PAIRS:
+        if e1 in text and e2 in text:
+            return True
+
     lower_text = text.lower()
     for keyword in BANNED_KEYWORDS:
         if keyword.lower() in lower_text:
             return True
 
-    if re.search(r"(https?://)?(t\.me|telegram\.me)/\+", text):
-        return True
+    spam_phrases = [
+        r"profil\w*\s*(da|ga|ta)\s*\w*\s*(kiring|bosing|tashrif|tezda)",
+        r"issiq\s*lahzalar\w*\s*(profil|profile)\w*",
+        r"(hozir|hoziroq|tezda|teran)\s*(kiring|bosing|qarang|tashrif)",
+        r"eng\s*issiq\s*lahzalar",
+        r"profilimda\s*(kiring|bosing|qarang|tashrif)",
+        r"(sek|sex|erotic|erotica|intim)\w+",
+        r"(nude|naked|nudes)\w*",
+        r"(casino|bet|poker|slot|jackpot)\w+",
+        r"(telegram\.me|t\.me)/\+\w+",
+        r"(onlyfans|fansly|linktr\.ee|linktree)",
+    ]
+
+    for pattern in spam_phrases:
+        if re.search(pattern, lower_text):
+            return True
 
     return False
 
