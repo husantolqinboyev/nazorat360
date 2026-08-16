@@ -111,3 +111,22 @@ async def get_group_total_warnings(group_id: int) -> int:
             WHERE group_id = $1
         """, group_id)
         return result or 0
+
+
+async def search_groups(keyword: str):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT group_id, group_name FROM groups WHERE group_name ILIKE $1",
+            f"%{keyword}%"
+        )
+        return [dict(row) for row in rows]
+
+
+async def get_groups_with_links():
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT group_id, group_name FROM groups ORDER BY added_at DESC"
+        )
+        return [dict(row) for row in rows]
