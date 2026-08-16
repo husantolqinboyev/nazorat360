@@ -26,6 +26,37 @@ async def is_user_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
         return False
 
 
+async def get_group_admin_ids(bot: Bot, chat_id: int) -> list[int]:
+    admin_ids = []
+    try:
+        admins = await bot.get_chat_administrators(chat_id)
+        for admin in admins:
+            if admin.status == "creator":
+                admin_ids.insert(0, admin.user.id)
+            elif admin.status == "administrator":
+                admin_ids.append(admin.user.id)
+    except Exception as e:
+        logger.error(f"Guruh adminlarini olishda xato: {e}")
+    return admin_ids
+
+
+async def notify_group_admins(bot: Bot, chat_id: int, chat_title: str, text: str, exclude_user_id: int = None):
+    admin_ids = await get_group_admin_ids(bot, chat_id)
+    for admin_id in admin_ids:
+        if admin_id == exclude_user_id:
+            continue
+        try:
+            await bot.send_message(
+                admin_id,
+                f"🛡️ <b>Guruhmaster hisobot</b>\n"
+                f"📍 Guruh: <b>{chat_title}</b>\n\n"
+                f"{text}",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Admin {admin_id} ga xabar yuborishda xato: {e}")
+
+
 @router.chat_member(ChatMemberUpdatedFilter(
     member_status_changed=IS_NOT_MEMBER >> IS_MEMBER
 ))
@@ -71,6 +102,7 @@ async def check_group_message(message: Message, bot: Bot):
         return
 
     chat_id = message.chat.id
+    chat_title = message.chat.title or "Noma'lum guruh"
     user_id = user.id
     text = message.text or message.caption or ""
 
@@ -80,6 +112,15 @@ async def check_group_message(message: Message, bot: Bot):
     if await is_blacklisted(user_id):
         try:
             await message.delete()
+            await notify_group_admins(
+                bot, chat_id, chat_title,
+                f"🗑️ <b>Xabar o'chirildi</b>\n\n"
+                f"👤 Foydalanuvchi: <b>{user.full_name}</b>\n"
+                f"🆔 ID: <code>{user_id}</code>\n"
+                f"📋 Sabab: Global qora ro'yxatda\n\n"
+                f"<i>Foydalanuvchi avtomatik bloklangan.</i>",
+                exclude_user_id=user_id
+            )
         except Exception as e:
             logger.error(f"Xabarni o'chirishda xato: {e}")
         return
@@ -107,6 +148,16 @@ async def check_group_message(message: Message, bot: Bot):
             )
             await log_warning(user_id, chat_id, 1, "warned")
             asyncio.create_task(delete_later(warn_msg, 10))
+
+            await notify_group_admins(
+                bot, chat_id, chat_title,
+                f"⚠️ <b>Ogohlantirish berildi</b>\n\n"
+                f"👤 Foydalanuvchi: <b>{user.full_name}</b>\n"
+                f"🆔 ID: <code>{user_id}</code>\n"
+                f"📝 Ogohlantirish: 1/3\n"
+                f"💬 Xabar: <i>{text[:100]}</i>",
+                exclude_user_id=user_id
+            )
         except Exception as e:
             logger.error(f"Ogohlantirish xabarini yuborishda xato: {e}")
 
@@ -121,6 +172,16 @@ async def check_group_message(message: Message, bot: Bot):
             )
             await log_warning(user_id, chat_id, 2, "warned")
             asyncio.create_task(delete_later(warn_msg, 10))
+
+            await notify_group_admins(
+                bot, chat_id, chat_title,
+                f"⚠️ <b>Ogohlantirish 2/3</b>\n\n"
+                f"👤 Foydalanuvchi: <b>{user.full_name}</b>\n"
+                f"🆔 ID: <code>{user_id}</code>\n"
+                f"📝 Ogohlantirish: 2/3\n"
+                f"❗ Yana 1 marta ban bo'ladi!",
+                exclude_user_id=user_id
+            )
         except Exception as e:
             logger.error(f"Ogohlantirish xabarini yuborishda xato: {e}")
 
@@ -145,13 +206,23 @@ async def check_group_message(message: Message, bot: Bot):
                 parse_mode="HTML"
             )
 
+            await notify_group_admins(
+                bot, chat_id, chat_title,
+                f"🚫 <b>BAN — Foydalanuvchi chiqarildi</b>\n\n"
+                f"👤 Foydalanuvchi: <b>{full_name}</b> (@{username})\n"
+                f"🆔 ID: <code>{user_id}</code>\n"
+                f"📋 Sabab: {reason}\n\n"
+                f"<i>Foydalanuvchi guruhdan chiqarildi va global qora ro'yxatga qo'shildi.</i>",
+                exclude_user_id=user_id
+            )
+
             try:
                 await bot.send_message(
                     ADMIN_ID,
                     f"🛡️ <b>Anti-Spam Hisobot</b>\n\n"
                     f"👤 Foydalanuvchi: {full_name} (@{username})\n"
                     f"🆔 ID: <code>{user_id}</code>\n"
-                    f"📍 Guruh: {message.chat.title}\n"
+                    f"📍 Guruh: {chat_title}\n"
                     f"📋 Sabab: {reason}",
                     parse_mode="HTML"
                 )

@@ -13,6 +13,8 @@ from bot.database.queries import (
 router = Router()
 logger = logging.getLogger(__name__)
 
+GROUPS_PER_PAGE = 10
+
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
@@ -82,11 +84,14 @@ async def admin_stats(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_groups")
+@router.callback_query(F.data.startswith("admin_groups"))
 async def admin_groups(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
         return
+
+    parts = callback.data.split(":")
+    page = int(parts[1]) if len(parts) > 1 else 1
 
     groups = await get_groups_with_links()
 
@@ -101,22 +106,32 @@ async def admin_groups(callback: CallbackQuery):
         await callback.answer()
         return
 
-    text = f"👥 <b>Guruhlar ro'yxati ({len(groups)} ta):</b>\n\n"
+    total_pages = (len(groups) + GROUPS_PER_PAGE - 1) // GROUPS_PER_PAGE
+    start = (page - 1) * GROUPS_PER_PAGE
+    end = start + GROUPS_PER_PAGE
+    page_groups = groups[start:end]
 
-    for i, group in enumerate(groups[:20], 1):
+    text = f"👥 <b>Guruhlar ro'yxati ({len(groups)} ta)</b>\n"
+    text += f"📄 Sahifa: {page}/{total_pages}\n\n"
+
+    for i, group in enumerate(page_groups, start + 1):
         name = group['group_name'] or "Noma'lum"
         gid = group['group_id']
-        link = f"https://t.me/c/{str(gid).replace('-100', '')}"
         text += f"{i}. <b>{name}</b>\n"
-        text += f"   🆔 <code>{gid}</code>\n"
-        text += f"   🔗 <a href=\"{link}\">Havola</a>\n\n"
+        text += f"   🆔 <code>{gid}</code>\n\n"
 
-    if len(groups) > 20:
-        text += f"<i>...va yana {len(groups) - 20} ta guruh.</i>"
+    buttons = []
+    nav = []
+    if page > 1:
+        nav.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"admin_groups:{page-1}"))
+    if page < total_pages:
+        nav.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"admin_groups:{page+1}"))
+    if nav:
+        buttons.append(nav)
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="admin_back")]
-    ])
+    buttons.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data="admin_back")])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await callback.message.edit_text(
         text,
