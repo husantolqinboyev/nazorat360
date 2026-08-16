@@ -68,6 +68,24 @@ async def get_blacklist_all():
         return [dict(row) for row in rows]
 
 
+async def get_blacklist_page(page: int, per_page: int = 15):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        offset = (page - 1) * per_page
+        rows = await conn.fetch(
+            "SELECT user_id, username, full_name, reason, banned_at FROM blacklist ORDER BY banned_at DESC LIMIT $1 OFFSET $2",
+            per_page, offset
+        )
+        return [dict(row) for row in rows]
+
+
+async def get_blacklist_total():
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.fetchval("SELECT COUNT(*) FROM blacklist")
+        return result or 0
+
+
 async def remove_from_blacklist(user_id: int):
     pool = await get_pool()
     async with pool.acquire() as conn:

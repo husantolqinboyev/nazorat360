@@ -5,15 +5,15 @@ from aiogram.filters import Command
 
 from bot.config import ADMIN_ID
 from bot.database.queries import (
-    get_groups_count, get_blacklist_count,
-    get_blacklist_all, remove_from_blacklist,
+    get_groups_count, get_blacklist_count, get_blacklist_total,
+    get_blacklist_page, get_blacklist_all, remove_from_blacklist,
     get_groups_with_links
 )
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-GROUPS_PER_PAGE = 10
+ITEMS_PER_PAGE = 10
 
 
 def is_admin(user_id: int) -> bool:
@@ -24,10 +24,10 @@ def get_main_panel():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="📊 Dashboard", callback_data="admin_stats"),
-            InlineKeyboardButton(text="👥 Guruhlar", callback_data="admin_groups"),
+            InlineKeyboardButton(text="👥 Guruhlar", callback_data="admin_groups:1"),
         ],
         [
-            InlineKeyboardButton(text="🚫 Qora ro'yxat", callback_data="admin_blacklist"),
+            InlineKeyboardButton(text="🚫 Qora ro'yxat", callback_data="admin_bl:1"),
             InlineKeyboardButton(text="📢 E'lon yuborish", callback_data="admin_broadcast"),
         ],
         [
@@ -65,13 +65,13 @@ async def cmd_admin(message: Message):
 
 
 @router.callback_query(F.data == "admin_stats")
-async def admin_stats(callback: CallbackQuery):
+async def admin_stats(callback: CallbackQuery, bot: Bot):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
         return
 
     groups_count = await get_groups_count()
-    blacklist_count = await get_blacklist_count()
+    blacklist_count = await get_blacklist_total()
 
     await callback.message.edit_text(
         f"📊 <b>Dashboard</b>\n\n"
@@ -84,8 +84,8 @@ async def admin_stats(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("admin_groups"))
-async def admin_groups(callback: CallbackQuery):
+@router.callback_query(F.data.startswith("admin_groups:"))
+async def admin_groups(callback: CallbackQuery, bot: Bot):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
         return
@@ -106,9 +106,11 @@ async def admin_groups(callback: CallbackQuery):
         await callback.answer()
         return
 
-    total_pages = (len(groups) + GROUPS_PER_PAGE - 1) // GROUPS_PER_PAGE
-    start = (page - 1) * GROUPS_PER_PAGE
-    end = start + GROUPS_PER_PAGE
+    total_pages = max(1, (len(groups) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+    start = (page - 1) * ITEMS_PER_PAGE
+    end = start + ITEMS_PER_PAGE
     page_groups = groups[start:end]
 
     text = f"👥 <b>Guruhlar ro'yxati ({len(groups)} ta)</b>\n"
@@ -117,8 +119,23 @@ async def admin_groups(callback: CallbackQuery):
     for i, group in enumerate(page_groups, start + 1):
         name = group['group_name'] or "Noma'lum"
         gid = group['group_id']
+
+        link = "Havola yo'q"
+        try:
+            chat = await bot.get_chat(gid)
+            if chat.username:
+                link = f"https://t.me/{chat.username}"
+            elif chat.invite_link:
+                link = chat.invite_link
+            else:
+                invite = await bot.export_chat_invite_link(gid)
+                link = invite
+        except Exception:
+            pass
+
         text += f"{i}. <b>{name}</b>\n"
-        text += f"   🆔 <code>{gid}</code>\n\n"
+        text += f"   🆔 <code>{gid}</code>\n"
+        text += f"   🔗 <a href=\"{link}\">Havola</a>\n\n"
 
     buttons = []
     nav = []
@@ -141,15 +158,18 @@ async def admin_groups(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_blacklist")
+@router.callback_query(F.data.startswith("admin_bl:"))
 async def admin_blacklist(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
         return
 
-    users = await get_blacklist_all()
+    parts = callback.data.split(":")
+    page = int(parts[1]) if len(parts) > 1 else 1
 
-    if not users:
+    total = await get_blacklist_total()
+
+    if total == 0:
         await callback.message.edit_text(
             "🚫 <b>Qora ro'yxat</b>\n\n"
             "Qora ro'yxat bo'sh.",
@@ -159,24 +179,39 @@ async def admin_blacklist(callback: CallbackQuery):
         await callback.answer()
         return
 
-    text = f"🚫 <b>Global Qora Ro'yxat ({len(users)} ta):</b>\n\n"
+    users = await get_blacklist_page(page, ITEMS_PER_PAGE)
+    total_pages = max(1, (total + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
 
-    for i, user in enumerate(users[:15], 1):
+    if page > total_pages:
+        page = total_pages
+        users = await get_blacklist_page(page, ITEMS_PER_PAGE)
+
+    text = f"🚫 <b>Global Qora Ro'yxat ({total} ta)</b>\n"
+    text += f"📄 Sahifa: {page}/{total_pages}\n\n"
+
+    start_num = (page - 1) * ITEMS_PER_PAGE + 1
+    for i, user in enumerate(users, start_num):
         name = user['full_name'] or "Noma'lum"
         uname = f"@{user['username']}" if user['username'] else "username yo'q"
-        reason = user['reason'] or " sabab ko'rsatilmagan"
+        reason = user['reason'] or "sabab ko'rsatilmagan"
         text += f"{i}. <b>{name}</b> ({uname})\n"
         text += f"   🆔 <code>{user['user_id']}</code>\n"
-        text += f"   📋 Sabab: {reason}\n\n"
+        text += f"   📋 {reason}\n\n"
 
-    if len(users) > 15:
-        text += f"<i>...va yana {len(users) - 15} ta foydalanuvchi.</i>"
+    text += "\n<i>Ban bekor qilish: /unban USER_ID</i>"
 
-    text += "\n\n<i>Ban bekor qilish: /unban USER_ID</i>"
+    buttons = []
+    nav = []
+    if page > 1:
+        nav.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"admin_bl:{page-1}"))
+    if page < total_pages:
+        nav.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"admin_bl:{page+1}"))
+    if nav:
+        buttons.append(nav)
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="admin_back")]
-    ])
+    buttons.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data="admin_back")])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await callback.message.edit_text(
         text,
@@ -258,7 +293,7 @@ async def cmd_stats(message: Message):
         return
 
     groups_count = await get_groups_count()
-    blacklist_count = await get_blacklist_count()
+    blacklist_count = await get_blacklist_total()
 
     await message.answer(
         f"📊 <b>Dashboard</b>\n\n"
