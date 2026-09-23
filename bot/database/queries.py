@@ -1,4 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
 from bot.database.connection import get_pool
+
+WARN_EXPIRY_HOURS = 6
 
 
 async def add_group(group_id: int, group_name: str):
@@ -49,13 +53,6 @@ async def is_blacklisted(user_id: int) -> bool:
             "SELECT EXISTS(SELECT 1 FROM blacklist WHERE user_id = $1)",
             user_id
         )
-        return result
-
-
-async def get_blacklist_count():
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        result = await conn.fetchval("SELECT COUNT(*) FROM blacklist")
         return result
 
 
@@ -148,3 +145,86 @@ async def get_groups_with_links():
             "SELECT group_id, group_name FROM groups ORDER BY added_at DESC"
         )
         return [dict(row) for row in rows]
+
+
+async def save_user(user_id: int, username: str, full_name: str):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO users (user_id, username, full_name, last_seen)
+            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET
+                username = $2, full_name = $3, last_seen = CURRENT_TIMESTAMP
+        """, user_id, username or "", full_name or "")
+
+
+async def get_all_users():
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT user_id FROM users")
+        return [dict(row) for row in rows]
+
+
+async def get_users_count():
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.fetchval("SELECT COUNT(*) FROM users")
+        return result or 0
+
+
+async def add_warning(user_id: int, group_id: int) -> int:
+    pool = await get_pool()
+    expiry = datetime.now(timezone.utc) - timedelta(hours=WARN_EXPIRY_HOURS)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            INSERT INTO user_warnings (user_id, group_id, warn_count, first_warn, last_warn)
+            VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, group_id) DO UPDATE SET
+                warn_count = CASE
+                    WHEN user_warnings.first_warn IS NULL
+                        OR user_warnings.first_warn < $3
+                    THEN 1
+                    ELSE user_warnings.warn_count + 1
+                END,
+                first_warn = CASE
+                    WHEN user_warnings.first_warn IS NULL
+                        OR user_warnings.first_warn < $3
+                    THEN CURRENT_TIMESTAMP
+                    ELSE user_warnings.first_warn
+                END,
+                last_warn = CURRENT_TIMESTAMP
+            RETURNING warn_count
+        """, user_id, group_id, expiry)
+        return row["warn_count"]
+
+
+async def get_warning_count(user_id: int, group_id: int) -> int:
+    pool = await get_pool()
+    expiry = datetime.now(timezone.utc) - timedelta(hours=WARN_EXPIRY_HOURS)
+    async with pool.acquire() as conn:
+        result = await conn.fetchval("""
+            SELECT warn_count FROM user_warnings
+            WHERE user_id = $1 AND group_id = $2
+              AND first_warn IS NOT NULL AND first_warn >= $3
+        """, user_id, group_id, expiry)
+        return result or 0
+
+
+async def reset_warnings(user_id: int, group_id: int):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM user_warnings WHERE user_id = $1 AND group_id = $2",
+            user_id, group_id
+        )
+
+
+async def cleanup_expired_warnings() -> int:
+    pool = await get_pool()
+    expiry = datetime.now(timezone.utc) - timedelta(hours=WARN_EXPIRY_HOURS)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM user_warnings WHERE first_warn IS NOT NULL AND first_warn < $1",
+            expiry
+        )
+        return int(result.split()[-1]) if result else 0

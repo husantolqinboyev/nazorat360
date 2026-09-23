@@ -54,6 +54,25 @@ async def init_tables():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    username VARCHAR(255),
+                    full_name VARCHAR(255),
+                    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_warnings (
+                    user_id BIGINT NOT NULL,
+                    group_id BIGINT NOT NULL,
+                    warn_count INTEGER DEFAULT 0,
+                    first_warn TIMESTAMP,
+                    last_warn TIMESTAMP,
+                    PRIMARY KEY (user_id, group_id)
+                )
+            """)
             logger.info("Database jadvallari yaratildi")
     except Exception as e:
         logger.error(f"Jadvallar yaratishda xato: {e}")

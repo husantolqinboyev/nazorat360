@@ -1,6 +1,8 @@
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import CommandStart
+
+from bot.database.queries import save_user
 
 router = Router()
 
@@ -11,6 +13,7 @@ Salom! Men Telegram guruhlaridagi spam va noqonuniy xabarlarni avtomatik tozalab
 <b>🔍 Mening imkoniyatlarim:</b>
 ✅ 18+ emoji va kontentni aniqlash
 ✅ Spam xabarlarni avtomatik o'chirish
+✅ APK fayllarni avtomatik tozalash
 ✅ 3 bosqichli ogohlantirish tizimi
 ✅ 6 soatlik TTL (vaqtinchalik ogohlantirish)
 ✅ Global qora ro'yxat (Blacklist)
@@ -24,6 +27,13 @@ Botni guruhingizga admin qilib qo'shing — men avtomatik ravishda guruhni himoy
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, bot):
+    user = message.from_user
+    if user:
+        try:
+            await save_user(user.id, user.username, user.full_name)
+        except Exception:
+            pass
+
     bot_info = await bot.get_me()
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
@@ -32,4 +42,4 @@ async def cmd_start(message: Message, bot):
         )]
     ])
 
-    await message.answer(START_TEXT, reply_markup=kb, parse_mode="HTML")
+    await message.answer(START_TEXT, reply_markup=kb)

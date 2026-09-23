@@ -23,4 +23,7 @@ wheels/
 env/
 venv/
 ENV/
-.env
+bot_log.txt
+bot_log_err.txt
+*.log
+.qodo/

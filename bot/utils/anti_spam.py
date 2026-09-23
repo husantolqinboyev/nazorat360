@@ -1,6 +1,5 @@
 import time
 import re
-from collections import defaultdict
 
 BANNED_EMOJIS = [
     "🔞", "🖕", "💣", "🔪", "💊", "🎰", "🃏",
@@ -36,7 +35,19 @@ SPAM_EMOJI_PAIRS = [
 WARN_EXPIRY = 6 * 3600
 MAX_WARNINGS = 3
 
-warnings_cache = defaultdict(lambda: {"count": 0, "first_warn": 0, "last_warn": 0})
+SPAM_PATTERNS = [
+    r"profil\w*\s*(da|ga|ta)\s*\w*\s*(kiring|bosing|tashrif|tezda)",
+    r"issiq\s*lahzalar\w*\s*(profil|profile)\w*",
+    r"(hozir|hoziroq|tezda|teran)\s*(kiring|bosing|qarang|tashrif)",
+    r"eng\s*issiq\s*lahzalar",
+    r"profilimda\s*(kiring|bosing|qarang|tashrif)",
+    r"\b(sex|sexy|seks|porn|porno|hentai|hentay|erotic|erotica|intim|nude|naked|nudes)\w*\b",
+    r"\b(casino|poker|jackpot|onlyfans|fansly)\b",
+    r"(telegram\.me|t\.me)/\+\w+",
+    r"(linktr\.ee|linktree)",
+]
+
+_spam_re = [re.compile(p) for p in SPAM_PATTERNS]
 
 
 def is_spam(text: str) -> bool:
@@ -53,73 +64,11 @@ def is_spam(text: str) -> bool:
 
     lower_text = text.lower()
     for keyword in BANNED_KEYWORDS:
-        if keyword.lower() in lower_text:
+        if keyword in lower_text:
             return True
 
-    spam_phrases = [
-        r"profil\w*\s*(da|ga|ta)\s*\w*\s*(kiring|bosing|tashrif|tezda)",
-        r"issiq\s*lahzalar\w*\s*(profil|profile)\w*",
-        r"(hozir|hoziroq|tezda|teran)\s*(kiring|bosing|qarang|tashrif)",
-        r"eng\s*issiq\s*lahzalar",
-        r"profilimda\s*(kiring|bosing|qarang|tashrif)",
-        r"(sek|sex|erotic|erotica|intim)\w+",
-        r"(nude|naked|nudes)\w*",
-        r"(casino|bet|poker|slot|jackpot)\w+",
-        r"(telegram\.me|t\.me)/\+\w+",
-        r"(onlyfans|fansly|linktr\.ee|linktree)",
-    ]
-
-    for pattern in spam_phrases:
-        if re.search(pattern, lower_text):
+    for pattern in _spam_re:
+        if pattern.search(lower_text):
             return True
 
     return False
-
-
-def add_warning(user_id: int, group_id: int) -> int:
-    key = f"{user_id}:{group_id}"
-    now = time.time()
-
-    data = warnings_cache[key]
-
-    if data["first_warn"] > 0 and (now - data["first_warn"]) > WARN_EXPIRY:
-        warnings_cache[key] = {"count": 0, "first_warn": 0, "last_warn": 0}
-        data = warnings_cache[key]
-
-    data["count"] += 1
-    data["last_warn"] = now
-
-    if data["first_warn"] == 0:
-        data["first_warn"] = now
-
-    return data["count"]
-
-
-def get_warning_count(user_id: int, group_id: int) -> int:
-    key = f"{user_id}:{group_id}"
-    now = time.time()
-    data = warnings_cache[key]
-
-    if data["first_warn"] > 0 and (now - data["first_warn"]) > WARN_EXPIRY:
-        warnings_cache[key] = {"count": 0, "first_warn": 0, "last_warn": 0}
-        return 0
-
-    return data["count"]
-
-
-def reset_warnings(user_id: int, group_id: int):
-    key = f"{user_id}:{group_id}"
-    warnings_cache[key] = {"count": 0, "first_warn": 0, "last_warn": 0}
-
-
-def cleanup_expired():
-    now = time.time()
-    expired_keys = []
-    for key, data in warnings_cache.items():
-        if data["first_warn"] > 0 and (now - data["first_warn"]) > WARN_EXPIRY:
-            expired_keys.append(key)
-
-    for key in expired_keys:
-        del warnings_cache[key]
-
-    return len(expired_keys)

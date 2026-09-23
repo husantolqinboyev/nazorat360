@@ -7,10 +7,12 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 import uvicorn
 
 from bot.config import BOT_TOKEN
 from bot.database.connection import create_pool, close_pool, init_tables
+from bot.database.queries import cleanup_expired_warnings
 from bot.handlers import start, group, admin, broadcast
 
 logging.basicConfig(
@@ -32,19 +34,24 @@ dp.include_routers(
     broadcast.router
 )
 
+_polling_alive = False
+
 
 async def run_bot_polling():
+    global _polling_alive
     try:
         await create_pool()
         await init_tables()
         logger.info("Database tayyor")
         logger.info("Bot polling boshlandi...")
+        _polling_alive = True
         await dp.start_polling(bot)
     except asyncio.CancelledError:
         logger.info("Bot polling bekor qilindi")
     except Exception as e:
         logger.error(f"Bot xatosi: {e}")
     finally:
+        _polling_alive = False
         try:
             await close_pool()
         except Exception:
@@ -55,16 +62,32 @@ async def run_bot_polling():
             pass
 
 
+async def cleanup_loop():
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            removed = await cleanup_expired_warnings()
+            if removed:
+                logger.info(f"Muddati o'tgan {removed} ta warning tozalandi")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Cleanup xatosi: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     polling_task = asyncio.create_task(run_bot_polling())
+    cleanup_task = asyncio.create_task(cleanup_loop())
     logger.info("Bot ishga tushdi")
     yield
     polling_task.cancel()
-    try:
-        await polling_task
-    except asyncio.CancelledError:
-        pass
+    cleanup_task.cancel()
+    for task in (polling_task, cleanup_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(lifespan=lifespan)
@@ -72,7 +95,12 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "bot": "Guruhmaster Bot"}
+    if not _polling_alive:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "bot down", "polling": False}
+        )
+    return {"status": "ok", "bot": "Guruhmaster Bot", "polling": True}
 
 
 @app.get("/")

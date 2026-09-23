@@ -1,13 +1,16 @@
 import logging
+from html import escape
+
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
+from aiogram.exceptions import TelegramBadRequest
 
 from bot.config import ADMIN_ID
 from bot.database.queries import (
-    get_groups_count, get_blacklist_count, get_blacklist_total,
+    get_groups_count, get_blacklist_total,
     get_blacklist_page, get_blacklist_all, remove_from_blacklist,
-    get_groups_with_links
+    get_groups_with_links, get_users_count,
 )
 
 router = Router()
@@ -18,6 +21,14 @@ ITEMS_PER_PAGE = 10
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
+
+
+async def safe_edit(message: Message, text: str, **kwargs):
+    try:
+        await message.edit_text(text, **kwargs)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
 
 
 def get_main_panel():
@@ -45,8 +56,7 @@ async def cmd_panel(message: Message):
     await message.answer(
         "🛡️ <b>Guruhmaster Bot — Admin Panel</b>\n\n"
         "Quyidagi tugmalardan birini tanlang:",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
 
 
@@ -59,8 +69,7 @@ async def cmd_admin(message: Message):
     await message.answer(
         "🛡️ <b>Guruhmaster Bot — Admin Panel</b>\n\n"
         "Quyidagi tugmalardan birini tanlang:",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
 
 
@@ -72,14 +81,16 @@ async def admin_stats(callback: CallbackQuery, bot: Bot):
 
     groups_count = await get_groups_count()
     blacklist_count = await get_blacklist_total()
+    users_count = await get_users_count()
 
-    await callback.message.edit_text(
+    await safe_edit(
+        callback.message,
         f"📊 <b>Dashboard</b>\n\n"
         f"👥 Guruhlar soni: <b>{groups_count}</b>\n"
+        f"👤 Userlar soni: <b>{users_count}</b>\n"
         f"🚫 Qora ro'yxat: <b>{blacklist_count}</b> foydalanuvchi\n\n"
         f"<i>Real vaqt rejimida yangilanadi.</i>",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
     await callback.answer()
 
@@ -96,12 +107,12 @@ async def admin_groups(callback: CallbackQuery, bot: Bot):
     groups = await get_groups_with_links()
 
     if not groups:
-        await callback.message.edit_text(
+        await safe_edit(
+            callback.message,
             "👥 <b>Guruhlar ro'yxati</b>\n\n"
             "Hozircha hech qanday guruh yo'q.\n"
             "Botni guruhga qo'shing — avtomatik ro'yxatga olinadi.",
-            reply_markup=get_main_panel(),
-            parse_mode="HTML"
+            reply_markup=get_main_panel()
         )
         await callback.answer()
         return
@@ -117,7 +128,7 @@ async def admin_groups(callback: CallbackQuery, bot: Bot):
     text += f"📄 Sahifa: {page}/{total_pages}\n\n"
 
     for i, group in enumerate(page_groups, start + 1):
-        name = group['group_name'] or "Noma'lum"
+        name = escape(group['group_name'] or "Noma'lum")
         gid = group['group_id']
 
         link = "Havola yo'q"
@@ -135,7 +146,7 @@ async def admin_groups(callback: CallbackQuery, bot: Bot):
 
         text += f"{i}. <b>{name}</b>\n"
         text += f"   🆔 <code>{gid}</code>\n"
-        text += f"   🔗 <a href=\"{link}\">Havola</a>\n\n"
+        text += f"   🔗 <a href=\"{escape(link)}\">Havola</a>\n\n"
 
     buttons = []
     nav = []
@@ -150,11 +161,7 @@ async def admin_groups(callback: CallbackQuery, bot: Bot):
 
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    await callback.message.edit_text(
-        text,
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
+    await safe_edit(callback.message, text, reply_markup=kb)
     await callback.answer()
 
 
@@ -170,11 +177,11 @@ async def admin_blacklist(callback: CallbackQuery):
     total = await get_blacklist_total()
 
     if total == 0:
-        await callback.message.edit_text(
+        await safe_edit(
+            callback.message,
             "🚫 <b>Qora ro'yxat</b>\n\n"
             "Qora ro'yxat bo'sh.",
-            reply_markup=get_main_panel(),
-            parse_mode="HTML"
+            reply_markup=get_main_panel()
         )
         await callback.answer()
         return
@@ -191,9 +198,9 @@ async def admin_blacklist(callback: CallbackQuery):
 
     start_num = (page - 1) * ITEMS_PER_PAGE + 1
     for i, user in enumerate(users, start_num):
-        name = user['full_name'] or "Noma'lum"
-        uname = f"@{user['username']}" if user['username'] else "username yo'q"
-        reason = user['reason'] or "sabab ko'rsatilmagan"
+        name = escape(user['full_name'] or "Noma'lum")
+        uname = f"@{escape(user['username'])}" if user['username'] else "username yo'q"
+        reason = escape(user['reason'] or "sabab ko'rsatilmagan")
         text += f"{i}. <b>{name}</b> ({uname})\n"
         text += f"   🆔 <code>{user['user_id']}</code>\n"
         text += f"   📋 {reason}\n\n"
@@ -213,11 +220,7 @@ async def admin_blacklist(callback: CallbackQuery):
 
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    await callback.message.edit_text(
-        text,
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
+    await safe_edit(callback.message, text, reply_markup=kb)
     await callback.answer()
 
 
@@ -227,18 +230,19 @@ async def admin_broadcast(callback: CallbackQuery):
         await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
         return
 
-    await callback.message.edit_text(
+    await safe_edit(
+        callback.message,
         "📢 <b>E'lon Yuborish</b>\n\n"
         "E'lon yuborish uchun /broadcast buyrug'ini ishlating.\n\n"
         "<b>Imkoniyatlar:</b>\n"
         "✅ Matn e'lon\n"
-        "✅ Foto + matn\n"
-        "✅ Video + matn\n"
-        "✅ Fayl + matn\n"
+        "✅ Fayl + caption (foto, video, dokument, GIF)\n"
         "✅ Tugma (URL havola) qo'shish\n"
+        "✅ Barcha guruhlarga yuborish\n"
+        "✅ Barcha userlarga yuborish\n"
+        "✅ Guruh + userlarga birga yuborish\n"
         "✅ Kalit so'z bo'yicha guruhlarni tanlash",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
     await callback.answer()
 
@@ -249,7 +253,8 @@ async def admin_help(callback: CallbackQuery):
         await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
         return
 
-    await callback.message.edit_text(
+    await safe_edit(
+        callback.message,
         "ℹ️ <b>Yordam</b>\n\n"
         "<b>Buyruqlar:</b>\n"
         "/panel — Admin panelni ochish\n"
@@ -257,16 +262,17 @@ async def admin_help(callback: CallbackQuery):
         "/broadcast — E'lon yuborish\n"
         "/blacklist — Qora ro'yxat\n"
         "/unban USER_ID — Ban bekor qilish\n"
-        "/status GURUH_ID — Guruh holati\n"
         "/help — Yordam\n\n"
+        "<b>Guruh buyruqlari:</b>\n"
+        "/status — Guruh holati (guruhda ishlaydi)\n\n"
         "<b>E'lon yuborish qadamlari:</b>\n"
         "1️⃣ /broadcast buyrug'ini yuboring\n"
-        "2️⃣ Media fayl yoki matn yuboring\n"
+        "2️⃣ Matn yoki media fayl (foto/video/dokument/GIF) yuboring\n"
         "3️⃣ Tugma (URL) qo'shing (ixtiyoriy)\n"
-        "4️⃣ Tasdiqlang\n\n"
+        "4️⃣ Maqsadni tanlang: guruhlar / userlar / ikkalasi\n"
+        "5️⃣ Tasdiqlang\n\n"
         "<i>Barcha buyruqlar faqat shaxsiy chatda ishlaydi.</i>",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
     await callback.answer()
 
@@ -277,11 +283,11 @@ async def admin_back(callback: CallbackQuery):
         await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
         return
 
-    await callback.message.edit_text(
+    await safe_edit(
+        callback.message,
         "🛡️ <b>Guruhmaster Bot — Admin Panel</b>\n\n"
         "Quyidagi tugmalardan birini tanlang:",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
     await callback.answer()
 
@@ -294,13 +300,14 @@ async def cmd_stats(message: Message):
 
     groups_count = await get_groups_count()
     blacklist_count = await get_blacklist_total()
+    users_count = await get_users_count()
 
     await message.answer(
         f"📊 <b>Dashboard</b>\n\n"
         f"👥 Guruhlar soni: <b>{groups_count}</b>\n"
+        f"👤 Userlar soni: <b>{users_count}</b>\n"
         f"🚫 Qora ro'yxat: <b>{blacklist_count}</b> foydalanuvchi",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
 
 
@@ -324,8 +331,7 @@ async def cmd_unban(message: Message):
     await remove_from_blacklist(user_id)
     await message.answer(
         f"✅ Foydalanuvchi <code>{user_id}</code> qora ro'yxatdan o'chirildi.",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
 
 
@@ -345,8 +351,7 @@ async def cmd_help(message: Message):
         "/unban USER_ID — Ban bekor qilish\n"
         "/help — Yordam\n\n"
         "<i>Barcha buyruqlar faqat shaxsiy chatda ishlaydi.</i>",
-        reply_markup=get_main_panel(),
-        parse_mode="HTML"
+        reply_markup=get_main_panel()
     )
 
 
@@ -364,8 +369,8 @@ async def cmd_blacklist(message: Message):
 
     text = "🚫 <b>Global Qora Ro'yxat:</b>\n\n"
     for i, user in enumerate(users[:20], 1):
-        name = user['full_name'] or "Noma'lum"
-        uname = f"@{user['username']}" if user['username'] else "username yo'q"
+        name = escape(user['full_name'] or "Noma'lum")
+        uname = f"@{escape(user['username'])}" if user['username'] else "username yo'q"
         text += f"{i}. {name} ({uname}) — ID: <code>{user['user_id']}</code>\n"
 
     if len(users) > 20:
@@ -373,4 +378,4 @@ async def cmd_blacklist(message: Message):
 
     text += "\n\n<i>Ban bekor qilish: /unban USER_ID</i>"
 
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(text)
