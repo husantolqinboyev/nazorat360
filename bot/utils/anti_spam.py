@@ -11,7 +11,7 @@ BANNED_KEYWORDS = [
     "issiq lahzalar", "issiq lahzalarim",
     "hoziroq kiring", "hozir kiring",
     "tezda kiring",
-    "sext", "sex", "erotic", "erotika",
+    "sext", "erotic", "erotika",
     "intim", "intimate", "naked", "nudes",
     "onlyfans", "fansly", "linktr",
     "sikis", "porn", "hentai", "hentay",
@@ -64,7 +64,7 @@ def is_spam(text: str) -> bool:
 
     lower_text = text.lower()
     for keyword in BANNED_KEYWORDS:
-        if keyword in lower_text:
+        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", lower_text):
             return True
 
     for pattern in _spam_re:

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from bot.database.connection import get_pool
 
@@ -174,7 +174,7 @@ async def get_users_count():
 
 async def add_warning(user_id: int, group_id: int) -> int:
     pool = await get_pool()
-    expiry = datetime.now(timezone.utc) - timedelta(hours=WARN_EXPIRY_HOURS)
+    expiry = datetime.now() - timedelta(hours=WARN_EXPIRY_HOURS)
     async with pool.acquire() as conn:
         row = await conn.fetchrow("""
             INSERT INTO user_warnings (user_id, group_id, warn_count, first_warn, last_warn)
@@ -200,7 +200,7 @@ async def add_warning(user_id: int, group_id: int) -> int:
 
 async def get_warning_count(user_id: int, group_id: int) -> int:
     pool = await get_pool()
-    expiry = datetime.now(timezone.utc) - timedelta(hours=WARN_EXPIRY_HOURS)
+    expiry = datetime.now() - timedelta(hours=WARN_EXPIRY_HOURS)
     async with pool.acquire() as conn:
         result = await conn.fetchval("""
             SELECT warn_count FROM user_warnings
@@ -221,7 +221,7 @@ async def reset_warnings(user_id: int, group_id: int):
 
 async def cleanup_expired_warnings() -> int:
     pool = await get_pool()
-    expiry = datetime.now(timezone.utc) - timedelta(hours=WARN_EXPIRY_HOURS)
+    expiry = datetime.now() - timedelta(hours=WARN_EXPIRY_HOURS)
     async with pool.acquire() as conn:
         result = await conn.execute(
             "DELETE FROM user_warnings WHERE first_warn IS NOT NULL AND first_warn < $1",

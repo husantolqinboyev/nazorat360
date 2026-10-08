@@ -10,7 +10,7 @@ from bot.config import ADMIN_ID
 from bot.database.queries import (
     get_groups_count, get_blacklist_total,
     get_blacklist_page, get_blacklist_all, remove_from_blacklist,
-    get_groups_with_links, get_users_count,
+    get_groups_with_links, get_users_count, get_all_groups,
 )
 
 router = Router()
@@ -312,7 +312,7 @@ async def cmd_stats(message: Message):
 
 
 @router.message(Command("unban"), F.chat.type == "private")
-async def cmd_unban(message: Message):
+async def cmd_unban(message: Message, bot: Bot):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Sizda bu buyruqni ishlatish huquqi yo'q.")
         return
@@ -328,9 +328,18 @@ async def cmd_unban(message: Message):
         await message.answer("❌ Noto'g'ri ID format.")
         return
 
+    groups = await get_all_groups()
+    restored = 0
+    for group in groups:
+        try:
+            await bot.unban_chat_member(group["group_id"], user_id, only_if_banned=True)
+            restored += 1
+        except Exception:
+            pass
     await remove_from_blacklist(user_id)
     await message.answer(
-        f"✅ Foydalanuvchi <code>{user_id}</code> qora ro'yxatdan o'chirildi.",
+        f"✅ Foydalanuvchi <code>{user_id}</code> qora ro'yxatdan o'chirildi.\n"
+        f"🔓 Guruhlarda ochilgan: <b>{restored}</b>",
         reply_markup=get_main_panel()
     )
 

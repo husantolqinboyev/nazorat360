@@ -5,7 +5,7 @@ from html import escape
 
 from aiogram import Router, F, Bot
 from aiogram.types import Message, ChatMemberUpdated
-from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, Command
+from aiogram.filters import Command
 
 from bot.database.queries import (
     add_group, remove_group, is_blacklisted,
@@ -99,12 +99,13 @@ def _is_apk(message: Message) -> bool:
     return name.endswith(".apk") or mime == "application/vnd.android.package-archive"
 
 
-@router.chat_member(ChatMemberUpdatedFilter(
-    member_status_changed=IS_NOT_MEMBER >> IS_MEMBER
-))
+@router.my_chat_member()
 async def on_bot_added(event: ChatMemberUpdated):
     chat = event.chat
-    if chat.type in ("group", "supergroup"):
+    old_status = event.old_chat_member.status
+    new_status = event.new_chat_member.status
+    active_statuses = {"member", "administrator", "creator"}
+    if chat.type in ("group", "supergroup") and new_status in active_statuses and old_status not in active_statuses:
         await add_group(chat.id, chat.title)
         logger.info(f"Bot guruhga qo'shildi: {chat.title} ({chat.id})")
 
@@ -115,12 +116,13 @@ async def on_bot_added(event: ChatMemberUpdated):
         )
 
 
-@router.chat_member(ChatMemberUpdatedFilter(
-    member_status_changed=IS_MEMBER >> IS_NOT_MEMBER
-))
+@router.my_chat_member()
 async def on_bot_removed(event: ChatMemberUpdated):
     chat = event.chat
-    if chat.type in ("group", "supergroup"):
+    old_status = event.old_chat_member.status
+    new_status = event.new_chat_member.status
+    active_statuses = {"member", "administrator", "creator"}
+    if chat.type in ("group", "supergroup") and old_status in active_statuses and new_status not in active_statuses:
         await remove_group(chat.id)
         logger.info(f"Bot guruhdan chiqarildi: {chat.title} ({chat.id})")
 
@@ -200,13 +202,17 @@ async def check_group_message(message: Message, bot: Bot):
     if await is_blacklisted(user_id):
         try:
             await message.delete()
+            try:
+                await bot.ban_chat_member(chat_id, user_id)
+            except Exception as ban_error:
+                logger.warning(f"Qora ro'yxatdagi userni ban qilishda xato: {ban_error}")
             await notify_group_admins(
                 bot, chat_id, safe_title,
                 f"🗑️ <b>Xabar o'chirildi</b>\n\n"
                 f"👤 Foydalanuvchi: <b>{safe_name}</b>\n"
                 f"🆔 ID: <code>{user_id}</code>\n"
                 f"📋 Sabab: Global qora ro'yxatda\n\n"
-                f"<i>Foydalanuvchi avtomatik bloklangan.</i>",
+                    f"<i>Foydalanuvchi avtomatik bloklangan.</i>",
                 exclude_user_id=user_id
             )
         except Exception as e:
@@ -312,7 +318,7 @@ async def check_group_message(message: Message, bot: Bot):
                     f"🛡️ <b>Anti-Spam Hisobot</b>\n\n"
                     f"👤 Foydalanuvchi: {escape(full_name)} (@{escape(username)})\n"
                     f"🆔 ID: <code>{user_id}</code>\n"
-                    f"📍 Guruh: {escape(chat_title)}\n"
+                    f"📍 Guruh: {safe_title}\n"
                     f"📋 Sabab: {escape(reason)}"
                 )
             except Exception:

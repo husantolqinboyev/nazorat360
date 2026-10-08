@@ -40,22 +40,35 @@ _polling_alive = False
 async def run_bot_polling():
     global _polling_alive
     try:
-        await create_pool()
-        await init_tables()
-        logger.info("Database tayyor")
-        logger.info("Bot polling boshlandi...")
-        _polling_alive = True
-        await dp.start_polling(bot)
+        retry_delay = 5
+        while True:
+            try:
+                await create_pool()
+                await init_tables()
+                logger.info("Database tayyor")
+                logger.info("Bot polling boshlandi...")
+                _polling_alive = True
+                retry_delay = 5
+                await dp.start_polling(bot)
+                logger.warning("Polling to'xtadi, qayta ishga tushiriladi")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Polling/ulanish xatosi: {e}")
+            finally:
+                _polling_alive = False
+                try:
+                    await close_pool()
+                except Exception:
+                    pass
+
+            logger.info(f"{retry_delay} soniyadan keyin qayta ulanish urinishi")
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 60)
     except asyncio.CancelledError:
         logger.info("Bot polling bekor qilindi")
-    except Exception as e:
-        logger.error(f"Bot xatosi: {e}")
     finally:
         _polling_alive = False
-        try:
-            await close_pool()
-        except Exception:
-            pass
         try:
             await bot.session.close()
         except Exception:
