@@ -73,6 +73,21 @@ async def init_tables():
                     PRIMARY KEY (user_id, group_id)
                 )
             """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS broadcast_logs (
+                    id SERIAL PRIMARY KEY,
+                    admin_id BIGINT NOT NULL,
+                    content_type VARCHAR(20) NOT NULL,
+                    target VARCHAR(20) NOT NULL,
+                    caption TEXT,
+                    button_text VARCHAR(64),
+                    button_url TEXT,
+                    success_count INTEGER DEFAULT 0,
+                    failed_count INTEGER DEFAULT 0,
+                    total_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             logger.info("Database jadvallari yaratildi")
     except Exception as e:
         logger.error(f"Jadvallar yaratishda xato: {e}")

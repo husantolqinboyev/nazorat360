@@ -13,7 +13,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter, TelegramForbiddenError
 
 from bot.config import ADMIN_ID
-from bot.database.queries import get_all_groups, search_groups, get_all_users
+from bot.database.queries import get_all_groups, search_groups, get_all_users, add_broadcast_log
 from bot.handlers.admin import safe_edit
 
 router = Router()
@@ -512,6 +512,21 @@ async def confirm_broadcast(callback: CallbackQuery, bot: Bot):
                 pass
 
     broadcast_states.pop(callback.from_user.id, None)
+
+    try:
+        await add_broadcast_log(
+            admin_id=callback.from_user.id,
+            content_type="media" if state.get("media") else "text",
+            target=state.get("target") or "unknown",
+            caption=state.get("caption") or state.get("text") or "",
+            button_text=state.get("button_text"),
+            button_url=state.get("button_url"),
+            success_count=success,
+            failed_count=failed,
+            total_count=total,
+        )
+    except Exception as e:
+        logger.error(f"E'lon tarixini saqlashda xato: {e}")
 
     await safe_edit(
         callback.message,

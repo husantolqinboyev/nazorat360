@@ -10,7 +10,7 @@ from bot.config import ADMIN_ID
 from bot.database.queries import (
     get_groups_count, get_blacklist_total,
     get_blacklist_page, get_blacklist_all, remove_from_blacklist,
-    get_groups_with_links, get_users_count, get_all_groups,
+    get_groups_with_links, get_users_count, get_all_groups, get_broadcast_logs,
 )
 
 router = Router()
@@ -40,6 +40,9 @@ def get_main_panel():
         [
             InlineKeyboardButton(text="🚫 Qora ro'yxat", callback_data="admin_bl:1"),
             InlineKeyboardButton(text="📢 E'lon yuborish", callback_data="admin_broadcast"),
+        ],
+        [
+            InlineKeyboardButton(text="📜 E'lonlar tarixi", callback_data="admin_broadcast_history"),
         ],
         [
             InlineKeyboardButton(text="ℹ️ Yordam", callback_data="admin_help"),
@@ -244,6 +247,29 @@ async def admin_broadcast(callback: CallbackQuery):
         "✅ Kalit so'z bo'yicha guruhlarni tanlash",
         reply_markup=get_main_panel()
     )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_broadcast_history")
+async def admin_broadcast_history(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Ruxsat yo'q.", show_alert=True)
+        return
+    logs = await get_broadcast_logs(10)
+    if not logs:
+        text = "📜 <b>E'lonlar tarixi</b>\n\nHali e'lon yuborilmagan."
+    else:
+        lines = ["📜 <b>So'nggi e'lonlar</b>\n"]
+        for item in logs:
+            stamp = item["created_at"].strftime("%d.%m.%Y %H:%M")
+            kind = "📎 Fayl" if item["content_type"] == "media" else "📝 Matn"
+            caption = escape((item["caption"] or "").replace("\n", " ")[:55]) or "(caption yo'q)"
+            lines.append(
+                f"<b>{stamp}</b> · {kind} · {escape(item['target'])}\n"
+                f"{caption}\n✅ {item['success_count']}  ❌ {item['failed_count']} / {item['total_count']}\n"
+            )
+        text = "\n".join(lines)
+    await safe_edit(callback.message, text, reply_markup=get_main_panel())
     await callback.answer()
 
 

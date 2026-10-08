@@ -228,3 +228,28 @@ async def cleanup_expired_warnings() -> int:
             expiry
         )
         return int(result.split()[-1]) if result else 0
+
+
+async def add_broadcast_log(admin_id: int, content_type: str, target: str,
+                            caption: str, button_text: str, button_url: str,
+                            success_count: int, failed_count: int, total_count: int):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO broadcast_logs
+                (admin_id, content_type, target, caption, button_text, button_url,
+                 success_count, failed_count, total_count)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        """, admin_id, content_type, target, caption or "", button_text or "",
+        button_url or "", success_count, failed_count, total_count)
+
+
+async def get_broadcast_logs(limit: int = 10):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT id, content_type, target, caption, button_text, button_url,
+                   success_count, failed_count, total_count, created_at
+            FROM broadcast_logs ORDER BY created_at DESC LIMIT $1
+        """, limit)
+        return [dict(row) for row in rows]
