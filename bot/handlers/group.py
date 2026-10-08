@@ -105,15 +105,22 @@ async def on_bot_added(event: ChatMemberUpdated):
     old_status = event.old_chat_member.status
     new_status = event.new_chat_member.status
     active_statuses = {"member", "administrator", "creator"}
-    if chat.type in ("group", "supergroup") and new_status in active_statuses and old_status not in active_statuses:
+    if chat.type in ("group", "supergroup") and new_status in active_statuses:
         await add_group(chat.id, chat.title)
-        logger.info(f"Bot guruhga qo'shildi: {chat.title} ({chat.id})")
-
-        await event.answer(
-            "🛡️ <b>Guruhmaster Bot</b> muvaffaqiyatli qo'shildi!\n\n"
-            "Men bu guruhdagi spam va noqonuniy xabarlarni avtomatik tozalayman.\n"
-            "<i>Admin huquqlari talab qilinadi.</i>"
-        )
+        if new_status == "administrator" and old_status != "administrator":
+            logger.info(f"Bot guruhda admin qilindi: {chat.title} ({chat.id})")
+            await event.answer(
+                "🛡️ <b>Guruhmaster Bot ishga tushdi!</b>\n\n"
+                "Assalomu alaykum, guruh a'zolari! Meni admin qilganingiz uchun rahmat.\n\n"
+                "🧹 <b>Nimalar qila olaman:</b>\n"
+                "• Spam va 18+ mazmundagi xabarlarni aniqlab o'chiraman\n"
+                "• APK fayllarni xavfsizlik sababli avtomatik tozalayman\n"
+                "• Qoidabuzarlarga 3 bosqichli ogohlantirish beraman\n"
+                "• Takroriy qoidabuzarlikda foydalanuvchini bloklayman\n"
+                "• Global qora ro'yxat orqali guruhni himoya qilaman\n\n"
+                "✅ <i>Admin bo'ldim — endi ishni boshlayman!</i>\n"
+                "Guruhingiz tinch va xavfsiz bo'lishi uchun xizmat qilaman."
+            )
 
 
 @router.my_chat_member()
