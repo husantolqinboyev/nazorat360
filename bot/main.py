@@ -108,12 +108,14 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 async def health_check():
-    if not _polling_alive:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "bot down", "polling": False}
-        )
-    return {"status": "ok", "bot": "Guruhmaster Bot", "polling": True}
+    # Render health checks must reflect the web process, not Telegram's
+    # temporary connection state. Polling reconnects in the background.
+    return {
+        "status": "ok",
+        "bot": "Guruhmaster Bot",
+        "polling": _polling_alive,
+        "message": "polling active" if _polling_alive else "polling reconnecting",
+    }
 
 
 @app.get("/")

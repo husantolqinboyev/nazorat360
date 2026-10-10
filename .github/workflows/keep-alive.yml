@@ -11,5 +11,7 @@ jobs:
     steps:
       - name: Ping bot
         run: |
-          curl -s https://nazorat360.onrender.com/health || true
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-delay 5 --connect-timeout 10 --max-time 30 \
+            https://nazorat360.onrender.com/health
           echo "Bot pinged at $(date)"
